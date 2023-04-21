@@ -298,8 +298,8 @@ def process_message(message, client):
     sending_topic = "autopilotService/" + origin
 
     if command == "connect":
+        print("Autopilot service connected by " + origin)
         if state == 'disconnected':
-            print("Autopilot service connected by " + origin)
             if op_mode == 'simulation':
                 connection_string = "tcp:127.0.0.1:5763"
             else:
@@ -320,7 +320,7 @@ def process_message(message, client):
             y = threading.Thread(target=send_telemetry_info)
             y.start()
         else:
-            print ('Autopilot already connected')
+            print('Autopilot already connected to flight controller')
 
 
 
@@ -328,6 +328,7 @@ def process_message(message, client):
         vehicle.close()
         sending_telemetry_info = False
         state = 'disconnected'
+        print('disconnected')
 
 
     if command == "takeOff":
