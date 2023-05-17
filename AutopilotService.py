@@ -428,13 +428,12 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
 
 
     # the external broker must run always in port 8000, in mqqts localhos port 8001 and in broker.hivemq.com wss port 8884
-    external_broker_port = 8884
+    external_broker_port = 8000
 
 
-
-    external_client = mqtt.Client("Autopilot_external", transport="websockets")
-    # external_client.tls_set('c:\\Users\\joana\\Documents\\uni\\TFG\\mobileAppCertificates\\localhost.crt')
-    external_client.tls_set(ca_certs=None, certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS, ciphers=None)
+    external_client = mqtt.Client("Autopilot_external", transport='websockets')
+    # external_client.tls_set('c:\\Users\\joana\\Documents\\uni\\TFG\\mobileAppCertificates\\rootCA.crt')
+    # external_client.tls_set(ca_certs=None, certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS, ciphers=None)
     if external_broker_address == 'classpip.upc.edu':
         external_client.username_pw_set(username, password)
 
