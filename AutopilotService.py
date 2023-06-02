@@ -433,7 +433,9 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
 
     external_client = mqtt.Client("Autopilot_external", transport='websockets')
     # external_client.tls_set('c:\\Users\\joana\\Documents\\uni\\TFG\\mobileAppCertificates\\rootCA.crt')
+    # external_client.tls_set(ca_certs='c:\\Users\\joana\\Documents\\uni\\TFG\\mobileAppCertificates\\rootCA.crt', certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS, ciphers=None)
     # external_client.tls_set(ca_certs=None, certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS, ciphers=None)
+    # external_client.tls_insecure_set(True)
     if external_broker_address == 'classpip.upc.edu':
         external_client.username_pw_set(username, password)
 
