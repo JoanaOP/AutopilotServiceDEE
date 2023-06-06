@@ -26,7 +26,7 @@ def arm():
         time.sleep(1)
     print(" Armed")
 
-def take_off(a_target_altitude, manualControl):
+def take_off(a_target_altitude, manualControl, waypointControl):
     global state
     vehicle.simple_takeoff(a_target_altitude)
     while True:
@@ -40,6 +40,10 @@ def take_off(a_target_altitude, manualControl):
     state = 'flying'
     if manualControl:
         w = threading.Thread(target=flying)
+        w.start()
+
+    if waypointControl:
+        w = threading.Thread(target=go_to_waypoint)
         w.start()
 
 
@@ -153,6 +157,7 @@ def flying():
 
 
 
+
 def distanceInMeters(aLocation1, aLocation2):
     """
     Returns the ground distance in metres between two LocationGlobal objects.
@@ -181,7 +186,7 @@ def executeFlightPlan(waypoints_json):
     state = 'arming'
     arm()
     state = 'takingOff'
-    take_off(altitude, False)
+    take_off(altitude, False, False)
     state = 'flying'
 
 
@@ -245,7 +250,7 @@ def executeFlightPlan2(waypoints_json):
     state = 'arming'
     arm()
     state = 'takingOff'
-    take_off(altitude, False)
+    take_off(altitude, False, False)
     state = 'flying'
     cmds = vehicle.commands
     cmds.clear()
@@ -270,7 +275,7 @@ def executeFlightPlan2(waypoints_json):
         print ('next ', nextwaypoint)
         if nextwaypoint == len(waypoints):  # Dummy waypoint - as soon as we reach waypoint 4 this is true and we exit.
             print("Last waypoint reached")
-            break;
+            break
         time.sleep(0.5)
 
     print('Return to launch')
@@ -281,11 +286,101 @@ def executeFlightPlan2(waypoints_json):
     state = 'onHearth'
 
 
+def go_to_waypoint():
+    global vehicle
+    global internal_client, external_client
+    global sending_topic
+    global state
+    global next_person_waypoint
+    global go
+
+    origin = sending_topic.split('/')[1]
+
+    altitude = 2
+    end = False
+    cmd = prepare_command(0, 0, 0)  # stop
+
+    currentLocation = vehicle.location.global_frame
+
+    while not end:
+        go = False
+        while not go:
+            vehicle.send_mavlink(cmd)
+            time.sleep(1)
+        # a new go command has been received. Check direction
+        # cmd = Command(0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0,0, 0, 0, 0, float(next_person_waypoint['lat']), float(next_person_waypoint['lon']), altitude)
+        vehicle.mode = VehicleMode('GUIDED')
+        distanceThreshold = 0.5
+        destinationPoint = dronekit.LocationGlobalRelative(float(next_person_waypoint['waypoint']['lat']), float(next_person_waypoint['waypoint']['lon']), altitude)
+        vehicle.simple_goto(destinationPoint)
+
+        heading = float(next_person_waypoint['heading']) * (math.pi / 180)
+
+        cmd = vehicle.message_factory.set_position_target_local_ned_encode(
+            0,  # time_boot_ms (not used)
+            0,
+            0,  # target system, target component
+            mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # frame
+            0b100111000111,  # type_mask (only speeds enabled)
+            0,
+            0,
+            0,  # x, y, z positions (not used)
+            0,
+            0,
+            0,  # x, y, z velocity in m/s
+            0,
+            0,
+            0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+            heading,
+            0,
+        )
+
+        currentLocation = vehicle.location.global_frame
+        dist = distanceInMeters(destinationPoint, currentLocation)
+        print(str(dist))
+
+        while dist > distanceThreshold:
+            print(str(dist))
+            time.sleep(0.25)
+            currentLocation = vehicle.location.global_frame
+            dist = distanceInMeters(destinationPoint, currentLocation)
+
+        print('reached')
+        external_client.publish(sending_topic + "/waypointReached")
+
+        z = threading.Thread(target=calculate_dif_heading)
+        z.start()
+
+
+
+
+
+def calculate_dif_heading():
+    global internal_client
+    global vehicle
+    global next_person_waypoint
+    global go
+
+    origin = sending_topic.split('/')[1]
+    heading = float(next_person_waypoint['heading'])
+    headingThreshold = 0.5
+    headingDif = abs(float(vehicle.heading) - heading)
+    print(str(vehicle.heading))
+    while headingDif > headingThreshold:
+        print(str(headingDif))
+        time.sleep(0.25)
+        headingDif = abs(float(vehicle.heading) - heading)
+
+    print('heading reached')
+    internal_client.publish(origin + "/cameraService/takePicture")
+    time.sleep(1)
+
 
 
 def process_message(message, client):
     global vehicle
     global direction
+    global next_person_waypoint
     global go
     global sending_telemetry_info
     global sending_topic
@@ -334,7 +429,7 @@ def process_message(message, client):
 
     if command == "takeOff":
         state = 'takingOff'
-        w = threading.Thread(target=take_off, args=[5,True ])
+        w = threading.Thread(target=take_off, args=[5,True,False ])
         w.start()
 
 
@@ -381,6 +476,22 @@ def process_message(message, client):
         waypoints_json = str(message.payload.decode("utf-8"))
         w = threading.Thread(target=executeFlightPlan2, args=[waypoints_json, ])
         w.start()
+
+    if command == 'armAndTakeoff':
+        state = 'arming'
+        arm()
+        state = 'takingOff'
+        take_off(3, False, True)
+        state = 'flying'
+
+    if command == 'goToWaypoint':
+        next_person_waypoint_json = str(message.payload.decode("utf-8"))
+        origin = sending_topic.split('/')[1]
+        print('going to next waypoint')
+        go = True
+        next_person_waypoint = json.loads(next_person_waypoint_json)
+
+
 
 def armed_change(self, attr_name, value):
     global vehicle
