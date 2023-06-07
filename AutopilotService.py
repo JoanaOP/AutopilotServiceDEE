@@ -292,19 +292,20 @@ def go_to_waypoint():
     global sending_topic
     global state
     global next_person_waypoint
-    global go
+    global go2
+    global end2
 
     origin = sending_topic.split('/')[1]
 
     altitude = 2
-    end = False
+    end2 = False
     cmd = prepare_command(0, 0, 0)  # stop
 
     currentLocation = vehicle.location.global_frame
 
-    while not end:
-        go = False
-        while not go:
+    while not end2:
+        go2 = False
+        while not go2:
             vehicle.send_mavlink(cmd)
             time.sleep(1)
         # a new go command has been received. Check direction
@@ -346,7 +347,6 @@ def go_to_waypoint():
             dist = distanceInMeters(destinationPoint, currentLocation)
 
         print('reached')
-        external_client.publish(sending_topic + "/waypointReached")
 
         z = threading.Thread(target=calculate_dif_heading)
         z.start()
@@ -373,6 +373,7 @@ def calculate_dif_heading():
 
     print('heading reached')
     internal_client.publish(origin + "/cameraService/takePicture")
+    external_client.publish(sending_topic + "/waypointReached")
     time.sleep(1)
 
 
@@ -387,6 +388,8 @@ def process_message(message, client):
     global op_mode
     global sending_topic
     global state
+    global end2
+    global go2
 
     splited = message.topic.split("/")
     origin = splited[0]
@@ -440,6 +443,7 @@ def process_message(message, client):
         state = 'returningHome'
         direction = "RTL"
         go = True
+        end2 = False
         w = threading.Thread(target=returning)
         w.start()
 
@@ -488,7 +492,7 @@ def process_message(message, client):
         next_person_waypoint_json = str(message.payload.decode("utf-8"))
         origin = sending_topic.split('/')[1]
         print('going to next waypoint')
-        go = True
+        go2 = True
         next_person_waypoint = json.loads(next_person_waypoint_json)
 
 
