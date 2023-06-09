@@ -297,7 +297,7 @@ def go_to_waypoint():
 
     origin = sending_topic.split('/')[1]
 
-    altitude = 2
+    altitude = 3
     end2 = False
     cmd = prepare_command(0, 0, 0)  # stop
 
