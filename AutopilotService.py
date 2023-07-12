@@ -310,6 +310,7 @@ def go_to_waypoint():
             time.sleep(1)
         # a new go command has been received. Check direction
         # cmd = Command(0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0,0, 0, 0, 0, float(next_person_waypoint['lat']), float(next_person_waypoint['lon']), altitude)
+        print('going to next waypoint')
         vehicle.mode = VehicleMode('GUIDED')
         distanceThreshold = 0.5
         destinationPoint = dronekit.LocationGlobalRelative(float(next_person_waypoint['waypoint']['lat']), float(next_person_waypoint['waypoint']['lon']), altitude)
@@ -382,6 +383,7 @@ def go_to_waypoint_2():
     global next_person_waypoint
     global go2
     global end2
+    global counter
 
     speed = 2
     end2 = False
@@ -409,7 +411,21 @@ def go_to_waypoint_2():
         go2 = False
         while not go2:
             vehicle.send_mavlink(cmd)
+            counter = counter + 1
+            if(counter == 300):
+                vehicle.mode = dronekit.VehicleMode("RTL")
+                state = 'returningHome'
+                direction = "RTL"
+                go = True
+                go2 = True
+                end2 = False
+                print("returning")
+                w = threading.Thread(target=returning)
+                w.start()
             time.sleep(1)
+        if(counter == 180):
+            break
+        print('going to next waypoint')
         lat = float(next_person_waypoint['waypoint']['lat'])
         lon = float(next_person_waypoint['waypoint']['lon'])
         lat_drone = vehicle.location.global_frame.lat
@@ -518,7 +534,7 @@ def calculate_dif_heading():
     headingThreshold = 0.5
     headingDif = abs(float(vehicle.heading) - heading)
     print(str(vehicle.heading))
-    while headingDif > headingThreshold:
+    while (headingDif > headingThreshold and state != 'returningHome'):
         print(str(headingDif))
         time.sleep(0.25)
         headingDif = abs(float(vehicle.heading) - heading)
@@ -543,7 +559,9 @@ def process_message(message, client):
     global state
     global end2
     global go2
+    global counter
 
+    print(message.topic)
     splited = message.topic.split("/")
     origin = splited[0]
     command = splited[2]
@@ -596,6 +614,7 @@ def process_message(message, client):
         state = 'returningHome'
         direction = "RTL"
         go = True
+        go2 = True
         end2 = False
         print("returning")
         w = threading.Thread(target=returning)
@@ -645,10 +664,13 @@ def process_message(message, client):
     if command == 'goToWaypoint':
         next_person_waypoint_json = str(message.payload.decode("utf-8"))
         origin = sending_topic.split('/')[1]
-        print('going to next waypoint')
         go2 = True
         next_person_waypoint = json.loads(next_person_waypoint_json)
+        counter = 0
 
+def on_connect(client, userdata, flags, rc):
+    external_client.subscribe("+/autopilotService/#", 2)
+    internal_client.subscribe("+/autopilotService/#")
 
 
 def armed_change(self, attr_name, value):
@@ -675,6 +697,9 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     global external_client
     global internal_client
     global state
+    global counter
+
+    counter = 0
 
     state = 'disconnected'
 
@@ -696,7 +721,7 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
 
 
 
-    # the external broker must run always in port 8000, in mqqts localhos port 8001 and in broker.hivemq.com wss port 8884
+    # the external broker must run always in port 8000, in mqqts mosquitto port 8001 and in broker.hivemq.com wss port 8884
     external_broker_port = 8000
 
 
@@ -708,11 +733,13 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     if external_broker_address == 'classpip.upc.edu':
         external_client.username_pw_set(username, password)
 
+    external_client.on_connect = on_connect
     external_client.on_message = on_external_message
     external_client.connect(external_broker_address, external_broker_port)
 
 
     internal_client = mqtt.Client("Autopilot_internal")
+    internal_client.on_connect = on_connect
     internal_client.on_message = on_internal_message
     internal_client.connect(internal_broker_address, internal_broker_port)
 
