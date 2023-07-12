@@ -6,6 +6,7 @@ import time
 import dronekit
 from dronekit import connect, Command, VehicleMode
 from pymavlink import mavutil
+import ssl
 
 
 def arm():
@@ -25,7 +26,7 @@ def arm():
         time.sleep(1)
     print(" Armed")
 
-def take_off(a_target_altitude, manualControl):
+def take_off(a_target_altitude, manualControl, waypointControl):
     global state
     vehicle.simple_takeoff(a_target_altitude)
     while True:
@@ -39,6 +40,10 @@ def take_off(a_target_altitude, manualControl):
     state = 'flying'
     if manualControl:
         w = threading.Thread(target=flying)
+        w.start()
+
+    if waypointControl:
+        w = threading.Thread(target=go_to_waypoint_2)
         w.start()
 
 
@@ -152,6 +157,7 @@ def flying():
 
 
 
+
 def distanceInMeters(aLocation1, aLocation2):
     """
     Returns the ground distance in metres between two LocationGlobal objects.
@@ -180,7 +186,7 @@ def executeFlightPlan(waypoints_json):
     state = 'arming'
     arm()
     state = 'takingOff'
-    take_off(altitude, False)
+    take_off(altitude, False, False)
     state = 'flying'
 
 
@@ -244,7 +250,7 @@ def executeFlightPlan2(waypoints_json):
     state = 'arming'
     arm()
     state = 'takingOff'
-    take_off(altitude, False)
+    take_off(altitude, False, False)
     state = 'flying'
     cmds = vehicle.commands
     cmds.clear()
@@ -269,7 +275,7 @@ def executeFlightPlan2(waypoints_json):
         print ('next ', nextwaypoint)
         if nextwaypoint == len(waypoints):  # Dummy waypoint - as soon as we reach waypoint 4 this is true and we exit.
             print("Last waypoint reached")
-            break;
+            break
         time.sleep(0.5)
 
     print('Return to launch')
@@ -280,18 +286,282 @@ def executeFlightPlan2(waypoints_json):
     state = 'onHearth'
 
 
+def go_to_waypoint():
+    global vehicle
+    global internal_client, external_client
+    global sending_topic
+    global state
+    global next_person_waypoint
+    global go2
+    global end2
+
+    origin = sending_topic.split('/')[1]
+
+    altitude = 3
+    end2 = False
+    cmd = prepare_command(0, 0, 0)  # stop
+
+    currentLocation = vehicle.location.global_frame
+
+    while not end2:
+        go2 = False
+        while not go2:
+            vehicle.send_mavlink(cmd)
+            time.sleep(1)
+        # a new go command has been received. Check direction
+        # cmd = Command(0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0,0, 0, 0, 0, float(next_person_waypoint['lat']), float(next_person_waypoint['lon']), altitude)
+        print('going to next waypoint')
+        vehicle.mode = VehicleMode('GUIDED')
+        distanceThreshold = 0.5
+        destinationPoint = dronekit.LocationGlobalRelative(float(next_person_waypoint['waypoint']['lat']), float(next_person_waypoint['waypoint']['lon']), altitude)
+        # vehicle.simple_goto(destinationPoint)
+
+        heading = float(next_person_waypoint['heading']) * (math.pi / 180)
+
+        cmd = vehicle.message_factory.set_position_target_global_int_encode(
+            0,  # time_boot_ms (not used)
+            0,
+            0,  # target system, target component
+            mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # frame
+            0b100111000111,
+            0,
+            0,
+            0,  # x, y, z positions (not used)
+            0,
+            0,
+            0,  # x, y, z velocity in m/s
+            0,
+            0,
+            0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+            heading,
+            0,
+        )
+
+        cmd2 = vehicle.message_factory.set_position_target_global_int_encode(
+            0,  # time_boot_ms (not used)
+            0,
+            0,  # target system, target component
+            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # frame
+            0b111111111000,
+            int(float(next_person_waypoint['waypoint']['lat'])*1e7),
+            int(float(next_person_waypoint['waypoint']['lon'])*1e7),
+            3,  # x, y, z positions (not used)
+            0,
+            0,
+            0,  # x, y, z velocity in m/s
+            0,
+            0,
+            0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+            0,
+            0,
+        )
+        vehicle.send_mavlink(cmd2)
+        currentLocation = vehicle.location.global_frame
+        dist = distanceInMeters(destinationPoint, currentLocation)
+        print(str(dist))
+
+        while dist >= distanceThreshold:
+            print(str(dist))
+            currentLocation = vehicle.location.global_frame
+            dist = distanceInMeters(destinationPoint, currentLocation)
+            vehicle.send_mavlink(cmd2)
+            if(dist >= distanceThreshold):
+                time.sleep(0.25)
+
+        print('reached')
+        vehicle.send_mavlink(cmd)
+        z = threading.Thread(target=calculate_dif_heading)
+        z.start()
+
+
+
+def go_to_waypoint_2():
+    global vehicle
+    global internal_client, external_client
+    global sending_topic
+    global state
+    global next_person_waypoint
+    global go2
+    global end2
+    global counter
+
+    speed = 2
+    end2 = False
+
+    cmd = vehicle.message_factory.set_position_target_global_int_encode(
+        0,  # time_boot_ms (not used)
+        0,
+        0,  # target system, target component
+        mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # frame
+        0b111111000111,
+        0,
+        0,
+        0,# x, y, z positions (not used)
+        0,
+        0,
+        0,  # x, y, z velocity in m/s
+        0,
+        0,
+        0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+        0,
+        0,
+    )
+
+    while not end2:
+        go2 = False
+        while not go2:
+            vehicle.send_mavlink(cmd)
+            counter = counter + 1
+            if(counter == 300):
+                vehicle.mode = dronekit.VehicleMode("RTL")
+                state = 'returningHome'
+                direction = "RTL"
+                go = True
+                go2 = True
+                end2 = False
+                print("returning")
+                w = threading.Thread(target=returning)
+                w.start()
+            time.sleep(1)
+        if(counter == 180):
+            break
+        print('going to next waypoint')
+        lat = float(next_person_waypoint['waypoint']['lat'])
+        lon = float(next_person_waypoint['waypoint']['lon'])
+        lat_drone = vehicle.location.global_frame.lat
+        lon_drone = vehicle.location.global_frame.lon
+        cos = (lat-lat_drone)/(math.sqrt(math.pow((lat-lat_drone), 2)+math.pow((lon-lon_drone), 2)))
+        sin = (lon-lon_drone)/(math.sqrt(math.pow((lat-lat_drone), 2)+math.pow((lon-lon_drone), 2)))
+        vel_north = cos*speed
+        vel_east = sin*speed
+        cmd = prepare_command(vel_north, vel_east, 0)
+        count = 0
+        distanceThreshold = 0.5
+        currentLocation = vehicle.location.global_frame
+        destinationPoint = dronekit.LocationGlobalRelative(lat, lon, 3)
+        dist = distanceInMeters(destinationPoint, currentLocation)
+        # vehicle.send_mavlink(cmd)
+        lastdist = dist + 1
+        # while dist >= distanceThreshold:
+        #     print(str(dist))
+        #     currentLocation = vehicle.location.global_frame
+        #     dist = distanceInMeters(destinationPoint, currentLocation)
+        #     if(count == 4):
+        #         count = 0
+        #         vehicle.send_mavlink(cmd)
+        #     if(dist >= distanceThreshold):
+        #         time.sleep(0.25)
+        #     if(dist < lastdist):
+        #         break
+        #     count = count + 1
+        #     lastdist = dist
+
+        cmd2 = vehicle.message_factory.set_position_target_global_int_encode(
+            0,  # time_boot_ms (not used)
+            0,
+            0,  # target system, target component
+            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # frame
+            0b111111111000,
+            int(float(next_person_waypoint['waypoint']['lat']) * 1e7),
+            int(float(next_person_waypoint['waypoint']['lon']) * 1e7),
+            3,  # x, y, z positions (not used)
+            0,
+            0,
+            0,  # x, y, z velocity in m/s
+            0,
+            0,
+            0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+            0,
+            0,
+        )
+        vehicle.send_mavlink(cmd2)
+        currentLocation = vehicle.location.global_frame
+        dist = distanceInMeters(destinationPoint, currentLocation)
+        print(str(dist))
+
+        while dist >= distanceThreshold:
+            print(str(dist))
+            currentLocation = vehicle.location.global_frame
+            dist = distanceInMeters(destinationPoint, currentLocation)
+            vehicle.send_mavlink(cmd2)
+            if (dist >= distanceThreshold):
+                time.sleep(0.25)
+
+        print('reached')
+
+        heading = float(next_person_waypoint['heading']) * (math.pi / 180)
+
+        heading_turn = heading - vehicle.heading
+
+        cmd = vehicle.message_factory.set_position_target_global_int_encode(
+            0,  # time_boot_ms (not used)
+            0,
+            0,  # target system, target component
+            mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # frame
+            0b100111000111,
+            0,
+            0,
+            0,  # x, y, z positions (not used)
+            0,
+            0,
+            0,  # x, y, z velocity in m/s
+            0,
+            0,
+            0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+            heading,
+            0,
+        )
+        vehicle.send_mavlink(cmd)
+        z = threading.Thread(target=calculate_dif_heading)
+        z.start()
+
+
+
+
+
+
+
+
+def calculate_dif_heading():
+    global internal_client
+    global external_client
+    global vehicle
+    global next_person_waypoint
+    global go
+
+    origin = sending_topic.split('/')[1]
+    heading = float(next_person_waypoint['heading'])
+    headingThreshold = 0.5
+    headingDif = abs(float(vehicle.heading) - heading)
+    print(str(vehicle.heading))
+    while (headingDif > headingThreshold and state != 'returningHome'):
+        print(str(headingDif))
+        time.sleep(0.25)
+        headingDif = abs(float(vehicle.heading) - heading)
+
+    print('heading reached')
+    external_client.publish(origin + "/cameraService/takePicture")
+    time.sleep(2)
+    external_client.publish(sending_topic + "/waypointReached")
+    time.sleep(1)
+
 
 
 def process_message(message, client):
     global vehicle
     global direction
+    global next_person_waypoint
     global go
     global sending_telemetry_info
     global sending_topic
     global op_mode
     global sending_topic
     global state
+    global end2
+    global go2
+    global counter
 
+    print(message.topic)
     splited = message.topic.split("/")
     origin = splited[0]
     command = splited[2]
@@ -333,7 +603,7 @@ def process_message(message, client):
 
     if command == "takeOff":
         state = 'takingOff'
-        w = threading.Thread(target=take_off, args=[5,True ])
+        w = threading.Thread(target=take_off, args=[5,True,False ])
         w.start()
 
 
@@ -344,6 +614,9 @@ def process_message(message, client):
         state = 'returningHome'
         direction = "RTL"
         go = True
+        go2 = True
+        end2 = False
+        print("returning")
         w = threading.Thread(target=returning)
         w.start()
 
@@ -381,6 +654,25 @@ def process_message(message, client):
         w = threading.Thread(target=executeFlightPlan2, args=[waypoints_json, ])
         w.start()
 
+    if command == 'armAndTakeoff':
+        state = 'arming'
+        arm()
+        state = 'takingOff'
+        take_off(3, False, True)
+        state = 'flying'
+
+    if command == 'goToWaypoint':
+        next_person_waypoint_json = str(message.payload.decode("utf-8"))
+        origin = sending_topic.split('/')[1]
+        go2 = True
+        next_person_waypoint = json.loads(next_person_waypoint_json)
+        counter = 0
+
+def on_connect(client, userdata, flags, rc):
+    external_client.subscribe("+/autopilotService/#", 2)
+    internal_client.subscribe("+/autopilotService/#")
+
+
 def armed_change(self, attr_name, value):
     global vehicle
     global state
@@ -405,6 +697,9 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     global external_client
     global internal_client
     global state
+    global counter
+
+    counter = 0
 
     state = 'disconnected'
 
@@ -426,31 +721,37 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
 
 
 
-    # the external broker must run always in port 8000
+    # the external broker must run always in port 8000, in mqqts mosquitto port 8001 and in broker.hivemq.com wss port 8884
     external_broker_port = 8000
 
 
-
-    external_client = mqtt.Client("Autopilot_external", transport="websockets")
+    external_client = mqtt.Client("Autopilot_external", transport='websockets')
+    # external_client.tls_set('c:\\Users\\joana\\Documents\\uni\\TFG\\mobileAppCertificates\\rootCA.crt')
+    # external_client.tls_set(ca_certs='c:\\Users\\joana\\Documents\\uni\\TFG\\mobileAppCertificates\\rootCA.crt', certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS, ciphers=None)
+    # external_client.tls_set(ca_certs=None, certfile=None, keyfile=None, cert_reqs=ssl.CERT_REQUIRED, tls_version=ssl.PROTOCOL_TLS, ciphers=None)
+    # external_client.tls_insecure_set(True)
     if external_broker_address == 'classpip.upc.edu':
         external_client.username_pw_set(username, password)
 
+    external_client.on_connect = on_connect
     external_client.on_message = on_external_message
     external_client.connect(external_broker_address, external_broker_port)
 
 
     internal_client = mqtt.Client("Autopilot_internal")
+    internal_client.on_connect = on_connect
     internal_client.on_message = on_internal_message
     internal_client.connect(internal_broker_address, internal_broker_port)
 
     print("Waiting....")
     external_client.subscribe("+/autopilotService/#", 2)
     internal_client.subscribe("+/autopilotService/#")
+    internal_client.loop_start()
     if operation_mode == 'simulation':
         external_client.loop_forever()
     else:
         external_client.loop_start()
-    internal_client.loop_start()
+
 
 
 if __name__ == '__main__':
