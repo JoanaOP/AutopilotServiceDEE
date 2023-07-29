@@ -43,7 +43,7 @@ def take_off(a_target_altitude, manualControl, waypointControl):
         w.start()
 
     if waypointControl:
-        w = threading.Thread(target=go_to_waypoint_2)
+        w = threading.Thread(target=go_to_waypoint)
         w.start()
 
 
@@ -286,96 +286,96 @@ def executeFlightPlan2(waypoints_json):
     state = 'onHearth'
 
 
+# def go_to_waypoint():
+#     global vehicle
+#     global internal_client, external_client
+#     global sending_topic
+#     global state
+#     global next_person_waypoint
+#     global go2
+#     global end2
+#
+#     origin = sending_topic.split('/')[1]
+#
+#     altitude = 3
+#     end2 = False
+#     cmd = prepare_command(0, 0, 0)  # stop
+#
+#     currentLocation = vehicle.location.global_frame
+#
+#     while not end2:
+#         go2 = False
+#         while not go2:
+#             vehicle.send_mavlink(cmd)
+#             time.sleep(1)
+#         # a new go command has been received. Check direction
+#         # cmd = Command(0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0,0, 0, 0, 0, float(next_person_waypoint['lat']), float(next_person_waypoint['lon']), altitude)
+#         print('going to next waypoint')
+#         vehicle.mode = VehicleMode('GUIDED')
+#         distanceThreshold = 0.5
+#         destinationPoint = dronekit.LocationGlobalRelative(float(next_person_waypoint['waypoint']['lat']), float(next_person_waypoint['waypoint']['lon']), altitude)
+#         # vehicle.simple_goto(destinationPoint)
+#
+#         heading = float(next_person_waypoint['heading']) * (math.pi / 180)
+#
+#         cmd = vehicle.message_factory.set_position_target_global_int_encode(
+#             0,  # time_boot_ms (not used)
+#             0,
+#             0,  # target system, target component
+#             mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # frame
+#             0b100111000111,
+#             0,
+#             0,
+#             0,  # x, y, z positions (not used)
+#             0,
+#             0,
+#             0,  # x, y, z velocity in m/s
+#             0,
+#             0,
+#             0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+#             heading,
+#             0,
+#         )
+#
+#         cmd2 = vehicle.message_factory.set_position_target_global_int_encode(
+#             0,  # time_boot_ms (not used)
+#             0,
+#             0,  # target system, target component
+#             mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # frame
+#             0b111111111000,
+#             int(float(next_person_waypoint['waypoint']['lat'])*1e7),
+#             int(float(next_person_waypoint['waypoint']['lon'])*1e7),
+#             3,  # x, y, z positions (not used)
+#             0,
+#             0,
+#             0,  # x, y, z velocity in m/s
+#             0,
+#             0,
+#             0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
+#             0,
+#             0,
+#         )
+#         vehicle.send_mavlink(cmd2)
+#         currentLocation = vehicle.location.global_frame
+#         dist = distanceInMeters(destinationPoint, currentLocation)
+#         print(str(dist))
+#
+#         while dist >= distanceThreshold:
+#             print(str(dist))
+#             currentLocation = vehicle.location.global_frame
+#             dist = distanceInMeters(destinationPoint, currentLocation)
+#             vehicle.send_mavlink(cmd2)
+#             if(dist >= distanceThreshold):
+#                 time.sleep(0.25)
+#
+#         print('reached')
+#         vehicle.send_mavlink(cmd)
+#         z = threading.Thread(target=calculate_dif_heading)
+#         z.start()
+
+
+
 def go_to_waypoint():
-    global vehicle
-    global internal_client, external_client
-    global sending_topic
-    global state
-    global next_person_waypoint
-    global go2
-    global end2
-
-    origin = sending_topic.split('/')[1]
-
-    altitude = 3
-    end2 = False
-    cmd = prepare_command(0, 0, 0)  # stop
-
-    currentLocation = vehicle.location.global_frame
-
-    while not end2:
-        go2 = False
-        while not go2:
-            vehicle.send_mavlink(cmd)
-            time.sleep(1)
-        # a new go command has been received. Check direction
-        # cmd = Command(0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0,0, 0, 0, 0, float(next_person_waypoint['lat']), float(next_person_waypoint['lon']), altitude)
-        print('going to next waypoint')
-        vehicle.mode = VehicleMode('GUIDED')
-        distanceThreshold = 0.5
-        destinationPoint = dronekit.LocationGlobalRelative(float(next_person_waypoint['waypoint']['lat']), float(next_person_waypoint['waypoint']['lon']), altitude)
-        # vehicle.simple_goto(destinationPoint)
-
-        heading = float(next_person_waypoint['heading']) * (math.pi / 180)
-
-        cmd = vehicle.message_factory.set_position_target_global_int_encode(
-            0,  # time_boot_ms (not used)
-            0,
-            0,  # target system, target component
-            mavutil.mavlink.MAV_FRAME_LOCAL_NED,  # frame
-            0b100111000111,
-            0,
-            0,
-            0,  # x, y, z positions (not used)
-            0,
-            0,
-            0,  # x, y, z velocity in m/s
-            0,
-            0,
-            0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
-            heading,
-            0,
-        )
-
-        cmd2 = vehicle.message_factory.set_position_target_global_int_encode(
-            0,  # time_boot_ms (not used)
-            0,
-            0,  # target system, target component
-            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,  # frame
-            0b111111111000,
-            int(float(next_person_waypoint['waypoint']['lat'])*1e7),
-            int(float(next_person_waypoint['waypoint']['lon'])*1e7),
-            3,  # x, y, z positions (not used)
-            0,
-            0,
-            0,  # x, y, z velocity in m/s
-            0,
-            0,
-            0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
-            0,
-            0,
-        )
-        vehicle.send_mavlink(cmd2)
-        currentLocation = vehicle.location.global_frame
-        dist = distanceInMeters(destinationPoint, currentLocation)
-        print(str(dist))
-
-        while dist >= distanceThreshold:
-            print(str(dist))
-            currentLocation = vehicle.location.global_frame
-            dist = distanceInMeters(destinationPoint, currentLocation)
-            vehicle.send_mavlink(cmd2)
-            if(dist >= distanceThreshold):
-                time.sleep(0.25)
-
-        print('reached')
-        vehicle.send_mavlink(cmd)
-        z = threading.Thread(target=calculate_dif_heading)
-        z.start()
-
-
-
-def go_to_waypoint_2():
     global vehicle
     global internal_client, external_client
     global sending_topic
@@ -423,38 +423,17 @@ def go_to_waypoint_2():
                 w = threading.Thread(target=returning)
                 w.start()
             time.sleep(1)
-        if(counter == 180):
+        if(counter == 300):
             break
         print('going to next waypoint')
         lat = float(next_person_waypoint['waypoint']['lat'])
         lon = float(next_person_waypoint['waypoint']['lon'])
         lat_drone = vehicle.location.global_frame.lat
         lon_drone = vehicle.location.global_frame.lon
-        cos = (lat-lat_drone)/(math.sqrt(math.pow((lat-lat_drone), 2)+math.pow((lon-lon_drone), 2)))
-        sin = (lon-lon_drone)/(math.sqrt(math.pow((lat-lat_drone), 2)+math.pow((lon-lon_drone), 2)))
-        vel_north = cos*speed
-        vel_east = sin*speed
-        cmd = prepare_command(vel_north, vel_east, 0)
-        count = 0
         distanceThreshold = 0.5
         currentLocation = vehicle.location.global_frame
         destinationPoint = dronekit.LocationGlobalRelative(lat, lon, 3)
         dist = distanceInMeters(destinationPoint, currentLocation)
-        # vehicle.send_mavlink(cmd)
-        lastdist = dist + 1
-        # while dist >= distanceThreshold:
-        #     print(str(dist))
-        #     currentLocation = vehicle.location.global_frame
-        #     dist = distanceInMeters(destinationPoint, currentLocation)
-        #     if(count == 4):
-        #         count = 0
-        #         vehicle.send_mavlink(cmd)
-        #     if(dist >= distanceThreshold):
-        #         time.sleep(0.25)
-        #     if(dist < lastdist):
-        #         break
-        #     count = count + 1
-        #     lastdist = dist
 
         cmd2 = vehicle.message_factory.set_position_target_global_int_encode(
             0,  # time_boot_ms (not used)
