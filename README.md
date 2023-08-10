@@ -111,5 +111,17 @@ The service must receive a json object specifying the flight plan with indicatio
 The service will execute the flight plan, changing the state accordingly (*'arming'*, *'armed'*, *'takingOff'*, and so on until *'onHearth'*).    
 When arrived to the next waypoint the service will publish this message: *'XXXX/autopilotService/waypointReached'*,, being XXXX the module requesting the service. The topic of the message is a json object containing *'lat'* and *'lon'* of the reached waypoint. If a picture must be taken in this waypoint, the service will publish this message IN THE INTERNAL BROKER: *'XXXX/cameraService/takePicture'*. The autopilot will return to launch after the last waypoint is reached.   
 
+# Changes done here:
+
+Added a new parameter on the take_off() function called waypoint control, when true, the go_to_waypoint() function will start executing in a new thread.
+
+Added the function go_to_waypoint() that has loop with another loop inside that allows the dron to stay in the same position until it receives a new waypoint and a new heading and then it moves to that waypoint and then rotates to the desired heading.
+
+When rotating the heading, a new thread will start with the new added function calculate_heading_diff(), that calculates if the heading is reached and if so sends the command to the camera service to take a photo.
+
+A new command is added on the reception of the MQTT messages called 'goToWaypoint' that will stop the inner loop on the go_to_waypoint() function to move the dron. 
+
+Also the command 'armAndTakeOff' is added to arm the drone and then take off but using the waypoint control modality.
+
 
 
