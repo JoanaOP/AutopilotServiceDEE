@@ -35,13 +35,15 @@ Command | Description | Payload | Answer | Answer payload
 --- | --- | --- | --- |--- 
 *connect* | connect with the simulator or the flight controller depending on the operation mode | No | No (see Note 1) | No
 *armDrone* | arms the drone (either simulated or real) | No | NO (see Note 2) | No 
-*takeOff* | get the drone take off to reach and altitude of 5 meters | No | No (see Note 3)  | No 
+*takeOff* | get the drone take off to reach an altitude of 5 meters | No | No (see Note 3)  | No 
 *returnToLaunch* | go to launch position |No  | No (see Note 4) | No    
 *land* | the dron will land |No  | No (see Note 5) | No     
 *disarmDrone* | disarm the drone |No  |  No (see Note 6) | No 
 *go* | move in certain direction |"North", "South", "East", "West", "NorthWest", "NorthEast", "SouthWest", "SouthEast" , "Stop"  | No | No 
 *disconnect* | disconnect from the simulator or the flight controller depending on the operation mode | No | NO (see Note 1) | No
 *executeFlightPlan* | execute the flight plan received | See Note 7 | see Note 7 | see Note 7
+*armAndTakeoff* | arms and gets the drone take off to reach an altitude of 3 meters. Used if the drone will be controlled by waypoints. | No | No (see Note 3) | No
+*goToWaypoint* | moves the drone to the waypoint received and rotates the heading | see Note 8 | *waypointReached* (see Note 8) | No
 
 
 Note 1    
@@ -78,7 +80,7 @@ The state will change to *arming* and then to *armed* as soon as the autopilot i
    
    
 Note 3    
-The state will change to *takingOff* and then to *flying* as soon as the autopilot reaches 5 meters of altitude.  
+The state will change to *takingOff* and then to *flying* as soon as the autopilot reaches the indicated meters of altitude.  
    
 Note 4    
 The state will change to *returningHome* and then to *onHearth* as soon as the autopilot in on hearth.    
@@ -110,6 +112,22 @@ The service must receive a json object specifying the flight plan with indicatio
 ```
 The service will execute the flight plan, changing the state accordingly (*'arming'*, *'armed'*, *'takingOff'*, and so on until *'onHearth'*).    
 When arrived to the next waypoint the service will publish this message: *'XXXX/autopilotService/waypointReached'*,, being XXXX the module requesting the service. The topic of the message is a json object containing *'lat'* and *'lon'* of the reached waypoint. If a picture must be taken in this waypoint, the service will publish this message IN THE INTERNAL BROKER: *'XXXX/cameraService/takePicture'*. The autopilot will return to launch after the last waypoint is reached.   
+
+Note 8    
+The service must receive a json object specifying the latitude and longitude of the waypoint and the heading that the drone must reach. This is an example of such json object:    
+
+
+```
+{
+   {
+      'lat': 41.124567,
+      'lon': 1.9889145
+   },   
+   'heading': heading
+} 
+```
+The service will move the drone to the waypoint and rotate the heading.   
+When the heading is reached the service will publish this message: *'XXXX/cameraService/takePicture'*, being XXXX the module requesting the service. Then it will answer with the message *'autopilotService/XXX/waypointReached'*.
 
 # Changes made here:
 
